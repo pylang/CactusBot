@@ -236,41 +236,73 @@ class PointsCommand(Command):
         self.points_name = points_name
 
     def __call__(self, args, data):
-        if len(args) == 3:
-            if args[0] == "give":
-                try:
-                    int(args[2])
-                except ValueError:
-                    return "Something's not right there. Try again. !points <give/remove/set> <username>"
+        chan_id = self.user.get_channel(data["channel"])["user"]["id"]
+        if len(args) == 4:
+            chan_id = self.user.get_channel(args[2])["user"]["id"]
 
-                user = session.query(User).filter_by(id=data["user_id"]).first()
+            if args[1] == "give":
+                user = session.query(User).filter_by(id=chan_id).first()
+                try:
+                    int(args[3])
+                except ValueError:
+                    return "Something's not right there. Try again. !points <give/remove/set> <username> <amt>"
 
                 if user:
-                    user.points = user.points + int(args[2])
-                    return "@{giver} game @{name} {amt} point{s}!".format(
+                    user.points = user.points + int(args[3])
+                    return "@{giver} gave @{name} {amt} points!".format(
                         giver=data['user_name'],
-                        name=args[1],
-                        amt=args[2]
+                        name=args[2],
+                        amt=args[3]
                     )
                 else:
                     return "@{send}The user '{user}' hasn't joined the channel.".format(
                         send=data['user_name'],
-                        user=args[1]
+                        user=args[2]
                     )
 
-            user = session.query(User).filter_by(id=data["user_id"]).first()
+            elif args[1] == "remove":
+                user = session.query(User).filter_by(id=chan_id).first()
+                try:
+                    int(args[3])
+                except ValueError:
+                    return "Something's not right there. Try again. !points <give/remove/set> <username> <amt>"
 
-        elif len(args) == 1:
-            return "@{send}: @{user} has {amt} {name}.".format(
-                send=data['user_name'],
-                user=args[0],
-                amt=user.points,
-                name=self.points_name + ('s' if user.points != 1 else '')
-            )
-        return "@{user} has {amount} {name}.".format(
-            user=data["user_name"],
-            amount=user.points,
-            name=self.points_name + ('s' if user.points != 1 else ''))
+                if user:
+                    user.points = user.points - int(args[3])
+
+                    return "@{send} removed {amt} from @{user}'s points".format(
+                        send=data['user_name'],
+                        amt=args[3],
+                        user=args[2]
+                    )
+                else:
+                    return "That user has never joined the channel!"
+
+            elif args[1] == "set":
+                user = session.query(User).filter_by(id=chan_id).first()
+                try:
+                    int(args[3])
+                except ValueError:
+                    return "Something's not right there. Try again. !points <give/remove/set> <username> <amt>"
+
+                if user:
+                    user.points = int(args[3])
+                    return "@{giver} set @{name}'s points to {amt}!".format(
+                        giver=data['user_name'],
+                        name=args[2],
+                        amt=args[3]
+                    )
+                else:
+                    return "@{send}The user '{user}' hasn't joined the channel.".format(
+                        send=data['user_name'],
+                        user=args[2]
+                    )
+        else:
+            user = session.query(User).filter_by(id=chan_id).first()
+            return "@{user} has {amount} {name}.".format(
+                user=data["user_name"],
+                amount=user.points,
+                name=self.points_name + ('s' if user.points != 1 else ''))
 
 
 class TemmieCommand(Command):
