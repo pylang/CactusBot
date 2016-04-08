@@ -236,9 +236,37 @@ class PointsCommand(Command):
         self.points_name = points_name
 
     def __call__(self, args, data):
-        if len(args) > 1:
-            return "Points update in development. :cactus"
-        user = session.query(User).filter_by(id=data["user_id"]).first()
+        if len(args) == 3:
+            if args[0] == "give":
+                try:
+                    int(args[2])
+                except ValueError:
+                    return "Something's not right there. Try again. !points <give/remove/set> <username>"
+
+                user = session.query(User).filter_by(id=data["user_id"]).first()
+
+                if user:
+                    user.points = user.points + int(args[2])
+                    return "@{giver} game @{name} {amt} point{s}!".format(
+                        giver=data['user_name'],
+                        name=args[1],
+                        amt=args[2]
+                    )
+                else:
+                    return "@{send}The user '{user}' hasn't joined the channel.".format(
+                        send=data['user_name'],
+                        user=args[1]
+                    )
+
+            user = session.query(User).filter_by(id=data["user_id"]).first()
+
+        elif len(args) == 1:
+            return "@{send}: @{user} has {amt} {name}.".format(
+                send=data['user_name'],
+                user=args[0],
+                amt=user.points,
+                name=self.points_name + ('s' if user.points != 1 else '')
+            )
         return "@{user} has {amount} {name}.".format(
             user=data["user_name"],
             amount=user.points,
