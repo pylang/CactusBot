@@ -3,18 +3,23 @@
 from messages import MessageHandler
 from beam import Beam
 
-from os.path import exists
-from sys import exit
+from models import Base, engine
+
 from json import load, dump
+
+from os.path import exists
 from shutil import copyfile
-from functools import reduce
+
+from functools import reduce, partial
 
 from tornado.ioloop import IOLoop
+from tornado.autoreload import start, add_reload_hook
 
+from sys import exit
 from traceback import format_exc
 from time import sleep
 
-from models import Base, engine
+from argparse import ArgumentParser
 
 
 cactus_art = """CactusBot initialized!
@@ -44,12 +49,17 @@ class Cactus(MessageHandler, Beam):
     started = False
     connected = False
 
-    def __init__(self, autorestart=True, **kwargs):
+    def __init__(self, **kwargs):
         super(Cactus, self).__init__(**kwargs)
-        self.debug = kwargs.get("DEBUG", False)
+
+        self.debug = kwargs.get("debug", False)
+
         self.config_file = kwargs.get("config_file", "data/config.json")
         self.stats_file = kwargs.get("stats_file", "data/stats.json")
         self.database = kwargs.get("database", "data/data.db")
+
+        self.silent = kwargs.get("silent", False)
+        self.no_messages = kwargs.get("no_messages", False)
 
     def _init_database(self, database):
         """Ensure the database exists."""
@@ -140,17 +150,34 @@ class Cactus(MessageHandler, Beam):
 
                 self._init_commands()
 
-                self.connect(self.channel_data["id"], self.bot_data["id"])
+                self.connect(
+                    self.channel_data["id"],
+                    self.bot_data["id"],
+                    silent=self.silent)
+
+                self.connect_to_liveloading(
+                    self.channel_data["id"],
+                    self.channel_data["userId"])
+
+                if self.debug:
+                    add_reload_hook(partial(
+                        self.send_message,
+                        "Restarting, thanks to debug mode. :spaceship"
+                    ))
+                    start(check_time=10000)
 
                 IOLoop.instance().start()
+
             except KeyboardInterrupt:
+                print()
                 self.logger.info("Removing thorns... done.")
                 try:
                     self.send_message("CactusBot deactivated! :cactus")
                 except Exception:
                     pass
-                self.logger.info("CactusBot deactivated.")
-                exit()
+                finally:
+                    exit()
+
             except Exception:
                 self.logger.critical("Oh no, I crashed!")
                 try:
@@ -170,7 +197,23 @@ class Cactus(MessageHandler, Beam):
                     self.logger.info("CactusBot deactivated.")
                     exit()
 
-
 if __name__ == "__main__":
-    cactus = Cactus(debug="debug")
+    parser = ArgumentParser()
+    parser.add_argument(
+        "--silent",
+        help="send no messages to chat",
+        action="store_true",
+        default=False
+    )
+    parser.add_argument(
+        "--debug",
+        help="set custom logger level",
+        nargs='?',
+        const=True,
+        default="info"
+    )
+
+    parsed = parser.parse_args()
+
+    cactus = Cactus(**parsed.__dict__)
     cactus.run()
