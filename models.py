@@ -138,6 +138,7 @@ class User(Base):
     points = Column(Integer, default=0)
     follow_date = Column(DateTime, default=datetime.fromtimestamp(0))
 
+    @staticmethod
     def exists(self, id):
         user = session.query(User).filter_by(id=id).first()
 
@@ -146,8 +147,9 @@ class User(Base):
         else:
             return False
 
+    @staticmethod
     def add_points(self, id, user, amount, announce):
-        if self.exists(id):
+        if self.exists(self, id):
             if amount > 0:
                 user = session.query(User).filter_by(id=id).first()
                 print(user.id)

@@ -12,7 +12,7 @@ from logging import getLevelName as get_level_name
 from logging import StreamHandler, FileHandler, Formatter
 
 from functools import partial
-from json import dumps, loads, load
+from json import dumps, loads
 
 from re import match
 
@@ -419,14 +419,18 @@ class Beam:
                             "Thanks for the subscription, @{}! <3".format(
                                 packet["data"][1]["user"]["username"]))
 
+    def _init_points(self):
+        PeriodicCallback(self.distribute_points, self.config.get("points").get("interval") * 1000).start()
+
     def distribute_points(self):
 
         points = self.config.get("points").get("per_interval")
-        print("F")
+
         for id, name in self.current_users.items():
             print(id)
             print(name)
-            add_status = User.add_points(id, name, points, False)
+
+            add_status = User.add_points(User, id, name, points, False)
 
             if add_status is "" or add_status == "":
                 pass
