@@ -427,9 +427,6 @@ class Beam:
         points = self.config.get("points").get("per_interval")
 
         for id, name in self.current_users.items():
-            print(id)
-            print(name)
-
             add_status = User.add_points(User, id, name, points, False)
 
             if add_status is "" or add_status == "":
