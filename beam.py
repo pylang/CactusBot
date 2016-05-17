@@ -12,7 +12,7 @@ from logging import getLevelName as get_level_name
 from logging import StreamHandler, FileHandler, Formatter
 
 from functools import partial
-from json import dumps, loads
+from json import dumps, loads, load
 
 from re import match
 
@@ -24,6 +24,8 @@ class Beam:
     path = "https://beam.pro/api/v1/"
 
     message_id = 0
+
+    current_users = dict()
 
     def __init__(self, debug="INFO", **kwargs):
         self._init_logger(debug, kwargs.get("log_to_file", True))
@@ -416,3 +418,17 @@ class Beam:
                         self.send_message(
                             "Thanks for the subscription, @{}! <3".format(
                                 packet["data"][1]["user"]["username"]))
+
+    def distribute_points(self):
+
+        points = self.config.get("points").get("per_interval")
+        print("F")
+        for id, name in self.current_users.items():
+            print(id)
+            print(name)
+            add_status = User.add_points(id, name, points, False)
+
+            if add_status is "" or add_status == "":
+                pass
+            else:
+                self.send_message(add_status)

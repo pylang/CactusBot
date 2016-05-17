@@ -138,13 +138,65 @@ class User(Base):
     points = Column(Integer, default=0)
     follow_date = Column(DateTime, default=datetime.fromtimestamp(0))
 
-    def exists(id):
+    def exists(self, id):
         user = session.query(User).filter_by(id=id).first()
 
         if user:
             return True
         else:
             return False
+
+    def add_points(self, id, user, amount, announce):
+        if self.exists(id):
+            if amount > 0:
+                user = session.query(User).filter_by(id=id).first()
+                print(user.id)
+
+                user.points += amount
+
+                session.add(user)
+                session.commit()
+                if announce:
+                    return "Added {amt} points to @{user}!".format(
+                        amt=amount, user=user)
+                else:
+                    return ""
+            else:
+                return "Cannot add negitive points to a user."
+        else:
+            return "That user has never joined the channel."
+
+    def remove_points(self, id, user, amount):
+        if self.exists(id):
+            if amount > 0:
+                user = session.query(User).filter_by(id=id).first()
+
+                if amount > user.points:
+                    user.points -= amount
+                    session.add(user)
+                else:
+                    return "Cannot remove more points than the user has. {to} > {curr}".format(to=amount, curr=user.points)
+                return "Removed {amt} points from @{user}!".format(
+                    amt=amount, user=user)
+            else:
+                return "Cannot add negitive points to a user."
+        else:
+            return "That user has never joined the channel."
+
+    def set_points(self, id, user, amount):
+        if self.exists(id):
+            if amount > 0:
+                user = session.query(User).filter_by(id=id).first()
+
+                user.points = amount
+                session.add(user)
+
+                return "Set @{user}'s points to {points}".format(
+                    points=amount, user=user)
+            else:
+                return "Cannot add negitive points to a user."
+        else:
+            return "That user has never joined the channel."
 
 
 class CommandCommand(Command):

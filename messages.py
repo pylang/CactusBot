@@ -192,6 +192,10 @@ class MessageHandler(Beam):
 
         session.commit()
 
+        self.current_users.update(
+            {data["id"]: data["username"]}
+        )
+
         self.logger.info("- {user} joined".format(
             user=data["username"]))
 
@@ -201,6 +205,8 @@ class MessageHandler(Beam):
 
     def leave_handler(self, data):
         """Handle user leave packets from Beam."""
+
+        del self.current_users[data["id"]]
 
         if data["username"] is not None:
             self.logger.info("- {user} left".format(

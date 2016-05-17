@@ -14,6 +14,7 @@ from functools import reduce, partial
 
 from tornado.ioloop import IOLoop
 from tornado.autoreload import add_reload_hook, watch, start
+from tornado.ioloop import PeriodicCallback
 
 from traceback import format_exc
 from time import sleep
@@ -171,6 +172,8 @@ class Cactus(MessageHandler, Beam):
                     ))
                     watch(self.config_file)
                     start(check_time=5000)
+
+                # PeriodicCallback(self.distribute_points, self.config.get("points").get("interval"))
 
                 IOLoop.instance().start()
 
