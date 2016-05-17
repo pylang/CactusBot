@@ -17,6 +17,8 @@ class MessageHandler(Beam):
         }
 
     def _init_commands(self):
+        """Initialize built-in commands."""
+
         self.commands = {
             "cactus": "Ohai! I'm CactusBot. :cactus",
             "test": "Test confirmed. :cactus",
@@ -26,9 +28,9 @@ class MessageHandler(Beam):
                 self.send_message,
                 self.bot_data["username"],
                 self.channel_data["token"]),
-            "quote": QuoteCommand(),
+            "quote": QuoteCommand(self.http_session),
             "social": SocialCommand(self.get_channel),
-            "uptime": UptimeCommand(),
+            "uptime": UptimeCommand(self._request),
             "friend": FriendCommand(self.get_channel),
             "points": PointsCommand(self.config["points"]["name"]),
             "spamprot": SpamProtCommand(self.update_config),
@@ -39,23 +41,37 @@ class MessageHandler(Beam):
         }
 
     def handle(self, response):
-        if "event" in response:
-            if response["event"] in self.events:
-                self.events[response["event"]](response["data"])
-            else:
-                self.logger.debug("No handler found for event {}.".format(
-                    response["event"]
-                ))
-        elif response.get("id") == 0:
-            self.send_message("CactusBot activated. Enjoy! :cactus")
+        """Handle responses from a Beam websocket."""
+
+        if response is not None:
+            if "data" not in response:
+                self.logger.debug("Data key not in response!")
+                self.logger.debug("response:\n\t{}".format(response))
+                return None
+        else:
+            # response IS None, so it's nothing
+            return None
+
+        data = response["data"]
+
+        if isinstance(data, dict):
+            if "event" in response:
+                if response["event"] in self.events:
+                    self.events[response["event"]](data)
+                else:
+                    self.logger.debug("No handler found for event {}.".format(
+                        response["event"]
+                    ))
+            elif data.get("authenticated") and response["id"] == 0:
+                self.send_message("CactusBot activated. Enjoy! :cactus")
 
     def message_handler(self, data):
-        parsed = str()
-        for chunk in data["message"]["message"]:
-            if chunk["type"] == "text":
-                parsed += chunk["data"]
-            else:
-                parsed += chunk["text"]
+        """Handle chat message packets from Beam."""
+
+        parsed = ''.join([
+            chunk["data"] if chunk["type"] == "text" else chunk["text"]
+            for chunk in data["message"]["message"]
+        ])
 
         self.logger.info("{bot}{me}[{user}] {message}".format(
             bot='$ ' if data["user_name"] == self.config["auth"]["username"]
@@ -105,8 +121,8 @@ class MessageHandler(Beam):
                 return self.send_message(
                     data["user_name"], "Please stop spamming emoticons.",
                     method="whisper")
-            elif (findall(("http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|"
-                           "[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"),
+            elif (findall((r"http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|"
+                          "[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+"),
                           parsed) and not
                     self.config["spam_protection"].get(
                         "allow_links", False)):
@@ -117,15 +133,20 @@ class MessageHandler(Beam):
                     data["user_name"], "Please stop posting links.",
                     method="whisper")
 
-        if parsed[0].startswith("!") and len(parsed) > 1:
+        if parsed == "/cry":
+            self.remove_message(data["channel"], data["id"])
+            return self.send_message("/me cries with {} :'(".format(
+                data["user_name"]))
+
+        if len(parsed) > 1 and parsed[0].startswith("!"):
             args = parsed.split()
 
             if args[0][1:] in self.commands:
                 response = self.commands[args[0][1:]]
                 if isinstance(response, str):
-                    message = response
+                    messages = response
                 else:
-                    message = response(args, data)
+                    messages = response(args, data)
             else:
                 options = [
                     ('-'.join(args[:2])[1:], ['-'.join(args[:2])] + args[2:]),
@@ -136,27 +157,39 @@ class MessageHandler(Beam):
                     command = session.query(
                         Command).filter_by(command=parse_method[0]).first()
                     if command:
-                        message = command(
+                        messages = command(
                             parse_method[1], data,
                             channel_name=self.channel_data["token"]
                         )
                         break
                 else:
-                    message = "Command not found."
+                    messages = "Command not found."
+
+            if isinstance(messages, str):
+                messages = (messages,)
 
             if data["message"]["meta"].get("whisper", False):
-                return self.send_message(
-                    data["user_name"], message, method="whisper")
+                for message in messages:
+                    self.send_message(
+                        data["user_name"], message, method="whisper")
             else:
-                return self.send_message(message)
+                self.send_message(*messages)
 
     def join_handler(self, data):
+        """Handle user join packets from Beam."""
+
         user = session.query(User).filter_by(id=data["id"]).first()
+
         if not user:
-            user = User(id=data["id"], joins=1)
-        else:
+            user = User(
+                id=data["id"],
+                joins=1
+            )
             session.add(user)
+        else:
             user.joins += 1
+            session.add(user)
+
         session.commit()
 
         self.logger.info("- {user} joined".format(
@@ -167,6 +200,8 @@ class MessageHandler(Beam):
                 username=data["username"]))
 
     def leave_handler(self, data):
+        """Handle user leave packets from Beam."""
+
         if data["username"] is not None:
             self.logger.info("- {user} left".format(
                 user=data["username"]))

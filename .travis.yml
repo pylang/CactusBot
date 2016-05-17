@@ -2,6 +2,11 @@ language: python
 python:
   - "3.4"
   - "3.5"
+branches:
+  only:
+    - master
+    - develop
+    - /^rel-v(\d+.){0,2}\d+$/
 install:
   - pip install flake8
 before_script:

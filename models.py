@@ -8,7 +8,7 @@ from functools import wraps, partial
 from os.path import abspath, dirname, join
 from datetime import datetime
 
-from re import sub, findall
+from re import sub, findall, match
 from random import randrange, choice
 
 from tornado.ioloop import PeriodicCallback
@@ -25,15 +25,24 @@ def role_specific(*roles, reply=None):
 
     def role_specific_decorator(function):
         @wraps(function)
-        def wrapper(self, args, data):
-            if any(filter(lambda r: r in data["user_roles"], roles)):
-                return function(self, args, data)
-            r = reply if reply else roles[0].lower() if roles else "permission"
-            return "This command is {}-only!".format(r)
+        def wrapper(self, args, data, **kwargs):
+            if any(filter(lambda role: role in data["user_roles"], roles)):
+                return function(self, args, data, **kwargs)
+            representation = (
+                reply if reply
+                else roles[0].lower().replace(' ', '-') if roles
+                else "permission"
+            )
+            return "This command is {}-only!".format(representation)
         return wrapper
     return role_specific_decorator
 
-mod_only = role_specific("Founder", "Staff", "Global Mod", "Mod", reply="mod")
+all_roles = (
+    "Founder", "Staff", "Global Mod", "Mod", "Subscriber", "Pro", "User"
+)
+
+mod_roles = ("Founder", "Staff", "Global Mod", "Mod")
+mod_only = role_specific(*mod_roles, reply="mod")
 
 
 class Command(Base):
@@ -46,38 +55,49 @@ class Command(Base):
 
     calls = Column(Integer, default=0)
 
-    repeat = relationship("Repeat", backref="command")
-
     creation = Column(DateTime)
     author = Column(Integer)
 
-    def __call__(self, args, data, channel_name=None):
-        response = self.response
+    permissions = Column(String)
 
-        response = response.replace("%name%", data["user_name"])
+    repeat = relationship("Repeat", backref="command")
 
-        try:
-            response = sub(
-                "%arg(\d+)%",
-                lambda match: args[int(match.group(1))],
-                response
+    def __call__(self, args, data, **kwargs):
+        if self.permissions:
+            roles = str(self.permissions).split(',') + list(mod_roles)
+        else:
+            roles = all_roles
+
+        @role_specific(*roles)
+        def run_command(self, args, data, channel_name=None):
+            response = self.response
+
+            response = response.replace("%name%", data["user_name"])
+
+            try:
+                response = sub(
+                    "%arg(\d+)%",
+                    lambda match: args[int(match.group(1))],
+                    response
+                )
+            except IndexError:
+                return "Not enough arguments!"
+
+            response = response.replace("%args%", ' '.join(args[1:]))
+
+            self.calls += 1
+            session.commit()
+
+            response = response.replace("%count%", str(self.calls))
+
+            response = response.replace(
+                "%channel%",
+                channel_name if channel_name else data["id"]
             )
-        except IndexError:
-            return "Not enough arguments!"
 
-        response = response.replace("%args%", ' '.join(args[1:]))
+            return response.split('\\n', 2)
 
-        self.calls += 1
-        session.commit()
-
-        response = response.replace("%count%", str(self.calls))
-
-        response = response.replace(
-            "%channel%",
-            channel_name if channel_name else data["id"]
-        )
-
-        return response
+        return run_command(self, args, data, **kwargs)
 
 
 class Repeat(Base):
@@ -116,47 +136,84 @@ class User(Base):
     offenses = Column(Integer, default=0)
 
     points = Column(Integer, default=0)
+    follow_date = Column(DateTime, default=datetime.fromtimestamp(0))
+
+    def exists(id):
+        user = session.query(User).filter_by(id=id).first()
+
+        if user:
+            return True
+        else:
+            return False
 
 
 class CommandCommand(Command):
 
     @mod_only
     def __call__(self, args, data):
-        if args[1] == "add":
-            if len(args) > 3:
-                command = session.query(Command).filter_by(
-                    command=args[2]).first()
-                if command:
-                    command.response = ' '.join(args[3:])
-                else:
-                    command = Command(
-                        command=args[2],
-                        response=' '.join(args[3:]),
-                        creation=datetime.utcnow(),
-                        author=data["user_id"]
-                    )
+        if len(args) > 1:
+            if args[1] == "add":
+                if len(args) > 3:
+                    symbols_to_permissions = {
+                        '+': "Mod",
+                        '$': "Subscriber"
+                    }
+
+                    symbols, name = match(
+                        "^([{}]?)(.+)$".format(
+                            ''.join(symbols_to_permissions)),
+                        args[2]
+                    ).groups()
+
+                    permissions = ','.join(
+                        {symbols_to_permissions[symbol] for symbol in symbols})
+
+                    command = session.query(Command).filter_by(
+                        command=name).first()
+
+                    if command:
+                        command.permissions = permissions
+                        command.response = ' '.join(args[3:])
+                    else:
+                        command = Command(
+                            command=name,
+                            permissions=permissions,
+                            response=' '.join(args[3:]),
+                            creation=datetime.utcnow(),
+                            author=data["user_id"]
+                        )
+
                     session.add(command)
                     session.commit()
-                return "Added command !{}.".format(args[2])
-            return "Not enough arguments!"
-        elif args[1] == "remove":
-            if len(args) > 2:
-                command = session.query(Command).filter_by(
-                    command=args[2])
-                if command.first():
-                    command.delete()
-                    session.commit()
-                    return "Removed command !{}.".format(args[2])
-                return "!{} does not exist!".format(args[2])
-            return "Not enough arguments!"
-        elif args[1] == "list":
-            commands = session.query(Command).all()
-            return "Commands: {commands}".format(
-                commands=', '.join([c.command for c in commands if c.command]))
-        return "Invalid argument: {}.".format(args[1])
+                    return "Added command !{}.".format(name)
+                return "Not enough arguments!"
+            elif args[1] == "remove":
+                if len(args) > 2:
+                    command = session.query(Command).filter_by(
+                        command=args[2]).first()
+                    if command is not None:
+                        session.delete(command)
+                        session.commit()
+                        return "Removed command !{}.".format(args[2])
+                    return "!{} does not exist!".format(args[2])
+                return "Not enough arguments!"
+            elif args[1] == "list":
+                commands = session.query(Command).all()
+                commands_list = ', '.join(
+                    [c.command for c in commands if c.command])
+                if commands_list:
+                    return "Commands: {commands}.".format(
+                        commands=commands_list)
+                return "No commands added."
+            return "Invalid argument: {}.".format(args[1])
+        return "Not enough arguments!"
 
 
 class QuoteCommand(Command):
+
+    def __init__(self, http_session):
+        super(QuoteCommand, self).__init__()
+        self.http_session = http_session
 
     @mod_only
     def __call__(self, args, data):
@@ -168,6 +225,21 @@ class QuoteCommand(Command):
                 pass
             except AttributeError:
                 return "Undefined quote with ID {}.".format(id)
+
+            if args[1] == "inspirational":
+                try:
+                    data = self.http_session.get(
+                        "http://api.forismatic.com/api/1.0/",
+                        params=dict(
+                            method="getQuote", lang="en", format="json")
+                    ).json()
+                    return "\"{quote}\" -{author}".format(
+                        quote=data["quoteText"].strip(),
+                        author=data["quoteAuthor"].strip()
+                    )
+                except Exception:
+                    return ("Unable to get inspirational quote. "
+                            "Have a :hamster instead.")
 
             if len(args) > 2:
                 if args[1] == "add":
@@ -185,9 +257,9 @@ class QuoteCommand(Command):
                         id = int(args[2])
                     except ValueError:
                         return "Invalid quote ID '{}'.".format(args[2])
-                    quote = session.query(Quote).filter_by(id=id)
-                    if quote.first():
-                        quote.delete()
+                    quote = session.query(Quote).filter_by(id=id).first()
+                    if quote is not None:
+                        session.delete(quote)
                         session.commit()
                         return "Removed quote with ID {}.".format(args[2])
                     return "Quote {} does not exist!".format(args[2])
@@ -207,12 +279,15 @@ class SocialCommand(Command):
         self.get_channel = get_channel
 
     def __call__(self, args, data=None):
-        s = self.get_channel(data["channel"])["user"]["social"]
+        channel_data = self.get_channel(data["channel"])
+        name = channel_data["token"]
+        s = channel_data["user"]["social"]
         a = [arg.lower() for arg in args[1:]]
         if s:
             if not a:
                 return ', '.join(': '.join((k.title(), s[k])) for k in s)
-            elif set(a).issubset(set(s)):
+            elif set(a).issubset(set(s).union({"beam"})):
+                s.update({"beam": "https://beam.pro/{}".format(name)})
                 return ', '.join(': '.join((k.title(), s[k])) for k in a)
             return "Data not found for service{s}: {}.".format(
                 ', '.join(set(a) - set(s)), s='s'*(len(set(a) - set(s)) != 1))
@@ -247,8 +322,21 @@ class CubeCommand(Command):
 
 class UptimeCommand(Command):
 
-    def __call__(self, args, data=None):
-        return "In development. :cactus"
+    def __init__(self, request):
+        super(UptimeCommand, self).__init__()
+        self.request = request
+
+    def __call__(self, args, data):
+        response = self.request(
+            "/channels/{id}/manifest.light".format(id=data["channel"]))
+        if response.get("since") is not None:
+            return "Channel has been live for {}.".format(
+                match(
+                    "(.+)\.\d{6}",
+                    str(datetime.utcnow() - datetime.strptime(
+                        response["since"][:-5], "%Y-%m-%dT%H:%M:%S")
+                        )).group(1))
+        return "Channel is offline."
 
 
 class PointsCommand(Command):
@@ -332,7 +420,7 @@ class RepeatCommand(Command):
     def __init__(self, send_message, bot_name, channel):
         super(RepeatCommand, self).__init__()
         self.send_message = send_message
-        self.data = {"user_name": bot_name}
+        self.data = {"user_name": bot_name, "user_roles": all_roles}
         self.channel = channel
 
         self.repeats = dict()
@@ -347,76 +435,86 @@ class RepeatCommand(Command):
 
     @mod_only
     def __call__(self, args, data):
-        if args[1] == "add":
-            if len(args) > 3:
-                try:
-                    interval = int(args[2])
-                except ValueError:
-                    return "Invalid interval: '{}'.".format(args[2])
+        if len(args) > 1:
+            if args[1] == "add":
+                if len(args) > 3:
+                    try:
+                        interval = int(args[2])
+                    except ValueError:
+                        return "Invalid interval: '{}'.".format(args[2])
 
-                repeat = session.query(Repeat).filter_by(
-                    command_name=args[3]).first()
+                    repeat = session.query(Repeat).filter_by(
+                        command_name=args[3]).first()
 
-                if repeat:
-                    repeat.interval = interval
-                    repeat.arguments = ' '.join(args[3:])
-                    periodic_callback = self.repeats[repeat.command.command]
-                    periodic_callback.callback_time = interval * 1000
-                    periodic_callback.stop()
-                    periodic_callback.start()
-                    session.add(repeat)
-                    session.commit()
-                    return "Repeat updated."
+                    if repeat:
+                        repeat.interval = interval
+                        repeat.arguments = ' '.join(args[3:])
+                        callback = self.repeats[repeat.command.command]
+                        callback.callback_time = interval * 1000
+                        callback.stop()
+                        callback.start()
+                        session.add(repeat)
+                        session.commit()
+                        return "Repeat updated."
 
-                command = session.query(Command).filter_by(command=args[3])
-                if command.first():
-                    command = command.first()
-                    repeat = Repeat(
-                        command_object=command,
-                        interval=interval,
-                        arguments=' '.join(args[3:])
-                    )
+                    command = session.query(Command).filter_by(command=args[3])
+                    if command.first():
+                        command = command.first()
+                        repeat = Repeat(
+                            command_object=command,
+                            interval=interval,
+                            arguments=' '.join(args[3:])
+                        )
 
-                    periodic_callback = PeriodicCallback(
-                        partial(self.send, repeat),
-                        interval * 1000
-                    )
-                    self.repeats[args[3]] = periodic_callback
-                    periodic_callback.start()
-                    session.add(repeat)
-                    session.commit()
-                    return "Repeating command '!{}' every {} seconds.".format(
-                        command.command, interval)
-                return "Undefined command '!{}'.".format(args[3])
-            return "Not enough arguments!"
-        elif args[1] == "remove":
-            if len(args) > 2:
-                repeat = session.query(Repeat).filter_by(command_name=args[2])
-                if repeat.first():
-                    self.repeats[args[2]].stop()
-                    del self.repeats[args[2]]
-                    repeat.delete()
-                    session.commit()
-                    return "Removed repeat for command !{}.".format(args[2])
-                return "Repeat for !{} does not exist!".format(args[2])
-            return "Not enough arguments!"
-        elif args[1] == "list":
-            repeats = session.query(Repeat).all()
-            return "Repeats: {repeats}".format(
-                repeats=', '.join(
-                    [r.command.command+' '+str(r.interval) for r in repeats]
+                        periodic_callback = PeriodicCallback(
+                            partial(self.send, repeat),
+                            interval * 1000
+                        )
+                        self.repeats[args[3]] = periodic_callback
+                        periodic_callback.start()
+                        session.add(repeat)
+                        session.commit()
+                        return "Repeating '!{}' every {} seconds.".format(
+                            command.command, interval)
+                    return "Undefined command '!{}'.".format(args[3])
+                return "Not enough arguments!"
+            elif args[1] == "remove":
+                if len(args) > 2:
+                    repeat = session.query(Repeat).filter_by(
+                        command_name=args[2]).first()
+                    if repeat is not None:
+                        self.repeats[args[2]].stop()
+                        del self.repeats[args[2]]
+                        session.delete(repeat)
+                        session.commit()
+                        return "Removed repeat for !{}.".format(args[2])
+                    return "Repeat for !{} does not exist!".format(args[2])
+                return "Not enough arguments!"
+            elif args[1] == "list":
+                repeats = session.query(Repeat).all()
+                return "Repeats: {repeats}".format(
+                    repeats=', '.join(tuple(
+                        r.command.command+' '+str(r.interval) for r in repeats
+                    ))
                 )
-            )
-        return "Invalid argument: {}.".format(args[1])
+            return "Invalid argument: {}.".format(args[1])
+        return "Not enough arguments!"
 
     def send(self, repeat):
-        self.send_message(
-            repeat.command(
-                repeat.arguments.split(),
-                self.data,
-                channel_name=self.channel
+        try:
+            self.send_message(
+                repeat.command(
+                    repeat.arguments.split(),
+                    self.data,
+                    channel_name=self.channel
+                )
             )
-        )
+        except TypeError:
+            command_name = repeat.command_name
+            self.repeats[command_name].stop()
+            del self.repeats[command_name]
+            session.delete(repeat)
+            session.commit()
 
 
 class TemmieCommand(Command):
@@ -457,14 +555,6 @@ class FriendCommand(Command):
             return "Too many arguments."
         else:
             return "Not enough arguments."
-
-    def remove_points(self, username, amount):
-        query = session.query(Base).filter_by(username=username).first()
-
-        if query:
-            session.delete(query)
-            return True
-        return False
 
 
 class SpamProtCommand(Command):

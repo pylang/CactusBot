@@ -13,16 +13,15 @@ from shutil import copyfile
 from functools import reduce, partial
 
 from tornado.ioloop import IOLoop
-from tornado.autoreload import start, add_reload_hook
+from tornado.autoreload import add_reload_hook, watch, start
 
-from sys import exit
 from traceback import format_exc
 from time import sleep
 
 from argparse import ArgumentParser
 
 
-cactus_art = """CactusBot initialized!
+cactus_art = r"""CactusBot initialized!
 
       ,`""',
       ;' ` ;
@@ -32,7 +31,7 @@ cactus_art = """CactusBot initialized!
 ;,` ; ;' ` ;   ,',        / ____|         | |
 ;`,'; ;`,',;  ;,' ;      | |     __ _  ___| |_ _   _ ___
 ;',`; ;` ' ; ;`'`';      | |    / _` |/ __| __| | | / __|
-;` '',''` `,',`',;       | |___| (_| | (__| |_| |_| \__ \\
+;` '',''` `,',`',;       | |___| (_| | (__| |_| |_| \__ \
  `''`'; ', ;`'`'          \_____\__,_|\___|\__|\__,_|___/
       ;' `';
       ;` ' ;
@@ -58,7 +57,7 @@ class Cactus(MessageHandler, Beam):
         self.stats_file = kwargs.get("stats_file", "data/stats.json")
         self.database = kwargs.get("database", "data/data.db")
 
-        self.silent = kwargs.get("silent", False)
+        self.quiet = kwargs.get("quiet", False)
         self.no_messages = kwargs.get("no_messages", False)
 
     def _init_database(self, database):
@@ -75,10 +74,10 @@ class Cactus(MessageHandler, Beam):
             self.logger.info("Done!")
 
     def load_config(self, filename):
-        """Load configuration."""
+        """Load configuration file."""
 
         if exists(filename):
-            self.logger.info("Configuration file was found. Loading...")
+            self.logger.info("Configuration file found. Loading...")
             self.config_file = filename
             with open(filename) as config:
                 self.config = load(config)
@@ -88,25 +87,29 @@ class Cactus(MessageHandler, Beam):
             copyfile("data/config-template.json", filename)
             self.logger.error(
                 "Configuration file created. Please enter values and restart.")
-            raise FileNotFoundError("Configuration not found.")
+            raise FileNotFoundError("Configuration file not found.")
             exit()
 
     def load_stats(self, filename):
+        """Load statistics file."""
+
         self.logger.warning("Statistics are not yet implemented.")
         return dict()
 
         if exists(filename):
             self.stats_file = filename
-            self.logger.info("Statistics file was found. Loading...")
+            self.logger.info("Statistics file found. Loading...")
             with open(filename) as stats:
                 self.stats = load(stats)
                 return self.stats
         else:
-            self.logger.warn("Statistics file was not found. Creating...")
+            self.logger.warn("Statistics file not found. Creating...")
             copyfile("data/stats-template.json", "data/stats.json")
             self.logger.info("Statistics file created.")
 
     def update_config(self, keys, value):
+        """Update configuration file value."""
+
         with open(self.config_file, 'r') as config:
             config_data = load(config)
             reduce(lambda d, k: d[k], keys.split('.')[:-1], config_data)[
@@ -117,6 +120,8 @@ class Cactus(MessageHandler, Beam):
         return self.config
 
     def update_stats(self, keys, value):
+        """Update statistics file value."""
+
         self.logger.warning("Statistics are not yet implemented.")
         return
 
@@ -136,6 +141,7 @@ class Cactus(MessageHandler, Beam):
         self._init_database(self.database)
         self.load_config(filename=self.config_file)
         self.load_stats(filename=self.stats_file)
+        self.started = True
 
         while self.config.get("autorestart") or not self.started:
             try:
@@ -143,28 +149,28 @@ class Cactus(MessageHandler, Beam):
                 self.logger.info("Authenticated as: {}.".format(
                     self.bot_data["username"]))
 
-                self.started = True
-
                 self.channel = self.config["channel"]
                 self.channel_data = self.get_channel(self.channel)
 
                 self._init_commands()
+                self._init_users()
 
                 self.connect(
                     self.channel_data["id"],
                     self.bot_data["id"],
-                    silent=self.silent)
+                    quiet=self.quiet)
 
                 self.connect_to_liveloading(
                     self.channel_data["id"],
                     self.channel_data["userId"])
 
-                if self.debug:
+                if str(self.debug).lower() in ("true", "debug"):
                     add_reload_hook(partial(
                         self.send_message,
                         "Restarting, thanks to debug mode. :spaceship"
                     ))
-                    start(check_time=10000)
+                    watch(self.config_file)
+                    start(check_time=5000)
 
                 IOLoop.instance().start()
 
@@ -180,11 +186,13 @@ class Cactus(MessageHandler, Beam):
 
             except Exception:
                 self.logger.critical("Oh no, I crashed!")
+
                 try:
                     self.send_message("Oh no, I crashed! :127")
                 except Exception:
                     pass
-                self.logger.error("\n\n" + format_exc())
+
+                self.logger.error('\n\n' + format_exc())
 
                 if self.config.get("autorestart"):
                     self.logger.info("Restarting in 10 seconds...")
@@ -198,16 +206,22 @@ class Cactus(MessageHandler, Beam):
                     exit()
 
 if __name__ == "__main__":
+
     parser = ArgumentParser()
+
     parser.add_argument(
-        "--silent",
-        help="send no messages to chat",
-        action="store_true",
+        "--quiet",
+        help="send no messages to public chat",
+        metavar="USER",
+        nargs='?',
+        const=True,
         default=False
     )
+
     parser.add_argument(
         "--debug",
         help="set custom logger level",
+        metavar="LEVEL",
         nargs='?',
         const=True,
         default="info"
