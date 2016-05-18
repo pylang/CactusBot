@@ -45,6 +45,10 @@ mod_roles = ("Founder", "Staff", "Global Mod", "Mod")
 mod_only = role_specific(*mod_roles, reply="mod")
 
 
+def is_mod(username):
+    pass
+
+
 class Command(Base):
     __tablename__ = "commands"
 
@@ -152,7 +156,6 @@ class User(Base):
         if self.exists(self, id):
             if amount > 0:
                 user = session.query(User).filter_by(id=id).first()
-                print(user.id)
 
                 user.points += amount
 
@@ -395,74 +398,51 @@ class UptimeCommand(Command):
 
 class PointsCommand(Command):
 
-    def __init__(self, points_name):
+    def __init__(self, points_name, get_channel):
         super(PointsCommand, self).__init__()
         self.points_name = points_name
+        self.get_channel = get_channel
 
     def __call__(self, args, data):
-        chan_id = self.user.get_channel(data["channel"])["user"]["id"]
         if len(args) == 4:
-            chan_id = self.user.get_channel(args[2])["user"]["id"]
+            id = self.get_channel(args[2]).get("userId")
 
-            if args[1] == "give":
-                user = session.query(User).filter_by(id=chan_id).first()
-                try:
-                    int(args[3])
-                except ValueError:
-                    return "Something's not right there. Try again. !points <give/remove/set> <username> <amt>"
+            if args[1] == "add":
+                # Format: !points add [username] [amount]
+                user = session.query(User).filter_by(id=id).first()
+                user.points += int(args[3])
 
-                if user:
-                    user.points = user.points + int(args[3])
-                    return "@{giver} gave @{name} {amt} points!".format(
-                        giver=data['user_name'],
-                        name=args[2],
-                        amt=args[3]
-                    )
-                else:
-                    return "@{send}The user '{user}' hasn't joined the channel.".format(
-                        send=data['user_name'],
-                        user=args[2]
-                    )
+                session.add(user)
+                session.commit()
 
+                return "@{user} now has {amt} points".format(user=args[2], amt=user.points)
             elif args[1] == "remove":
-                user = session.query(User).filter_by(id=chan_id).first()
-                try:
-                    int(args[3])
-                except ValueError:
-                    return "Something's not right there. Try again. !points <give/remove/set> <username> <amt>"
+                # Format: !points remove [username] [amount]
+                user = session.query(User).filter_by(id=id).first()
 
-                if user:
-                    user.points = user.points - int(args[3])
-
-                    return "@{send} removed {amt} from @{user}'s points".format(
-                        send=data['user_name'],
-                        amt=args[3],
-                        user=args[2]
-                    )
+                if int(args[3]) > user.points:
+                    return "Cannot remove more points than the user has."
                 else:
-                    return "That user has never joined the channel!"
+                    user.points -= int(args[3])
 
+                    session.add(user)
+                    session.commit()
+
+                    return "@{user}'s points have been decreased to: {amt}".format(user=args[2], amt=user.points)
             elif args[1] == "set":
-                user = session.query(User).filter_by(id=chan_id).first()
-                try:
-                    int(args[3])
-                except ValueError:
-                    return "Something's not right there. Try again. !points <give/remove/set> <username> <amt>"
+                # Format: !points set [username] [amount]
+                user = session.query(User).filter_by(id=id).first()
+                user.points = int(args[3])
 
-                if user:
-                    user.points = int(args[3])
-                    return "@{giver} set @{name}'s points to {amt}!".format(
-                        giver=data['user_name'],
-                        name=args[2],
-                        amt=args[3]
-                    )
-                else:
-                    return "@{send}The user '{user}' hasn't joined the channel.".format(
-                        send=data['user_name'],
-                        user=args[2]
-                    )
+                session.add(user)
+                session.commit()
+
+                return "Set @{user}'s points to {amt}".format(user=args[2], amt=args[3])
+            else:
+                return "Invalid option"
         else:
-            user = session.query(User).filter_by(id=chan_id).first()
+            id = data["user_id"]
+            user = session.query(User).filter_by(id=id).first()
             return "@{user} has {amount} {name}.".format(
                 user=data["user_name"],
                 amount=user.points,
