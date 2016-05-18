@@ -77,6 +77,10 @@ class Beam:
         self.logger.info("Logger initialized with level '{}'.".format(level))
 
     def _init_users(self):
+        names = set(
+            user["userName"] for user in
+            self.get_chat_users(self.channel_data["id"]))
+
         viewers = set(
             user["userId"] for user in
             self.get_chat_users(self.channel_data["id"]))
@@ -87,6 +91,10 @@ class Beam:
         for user in viewers - stored_users:
             user = User(id=user, joins=1)
             session.add(user)
+
+        for name in names:
+            for user in viewers:
+                self.current_users.update({str(user): str(name)})
 
         session.commit()
 
