@@ -2,6 +2,7 @@ from sqlalchemy import create_engine
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
 
 from functools import wraps, partial
 
@@ -142,66 +143,26 @@ class User(Base):
     points = Column(Integer, default=0)
     follow_date = Column(DateTime, default=datetime.fromtimestamp(0))
 
-    @staticmethod
-    def exists(self, id):
-        user = session.query(User).filter_by(id=id).first()
+    def add_points(self, user, amount, allow_negative=True):
+        if not allow_negative and -amount > user.points:
+            return "Cannot remove more points than the user has."
+        user.points += amount
+        session.add(self)
+        session.commit()
 
-        if user:
-            return True
-        else:
-            return False
+    def remove_points(self, user, amount, allow_negative=True):
+        if not allow_negative and amount > user.points:
+            return "Cannot remove more points than the user has."
+        user.points -= amount
+        session.add(user)
+        session.commit()
 
-    @staticmethod
-    def add_points(self, id, user, amount, announce):
-        if self.exists(self, id):
-            if amount > 0:
-                user = session.query(User).filter_by(id=id).first()
-
-                user.points += amount
-
-                session.add(user)
-                session.commit()
-                if announce:
-                    return "Added {amt} points to @{user}!".format(
-                        amt=amount, user=user)
-                else:
-                    return ""
-            else:
-                return "Cannot add negitive points to a user."
-        else:
-            return "That user has never joined the channel."
-
-    def remove_points(self, id, user, amount):
-        if self.exists(id):
-            if amount > 0:
-                user = session.query(User).filter_by(id=id).first()
-
-                if amount > user.points:
-                    user.points -= amount
-                    session.add(user)
-                else:
-                    return "Cannot remove more points than the user has. {to} > {curr}".format(to=amount, curr=user.points)
-                return "Removed {amt} points from @{user}!".format(
-                    amt=amount, user=user)
-            else:
-                return "Cannot add negitive points to a user."
-        else:
-            return "That user has never joined the channel."
-
-    def set_points(self, id, user, amount):
-        if self.exists(id):
-            if amount > 0:
-                user = session.query(User).filter_by(id=id).first()
-
-                user.points = amount
-                session.add(user)
-
-                return "Set @{user}'s points to {points}".format(
-                    points=amount, user=user)
-            else:
-                return "Cannot add negitive points to a user."
-        else:
-            return "That user has never joined the channel."
+    def set_points(self, user, amount, allow_negative=True):
+        if not allow_negative and amount < 0:
+            return "Negative point values are not allowed."
+        user.points = amount
+        session.add(user)
+        session.commit()
 
 
 class CommandCommand(Command):
@@ -403,49 +364,60 @@ class PointsCommand(Command):
         self.points_name = points_name
         self.get_channel = get_channel
 
+    @mod_only
     def __call__(self, args, data):
-        if len(args) == 4:
+        if len(args) > 3:
             id = self.get_channel(args[2]).get("userId")
+            if id is None:
+                return "@{user} has never joined the channel.".format(
+                    user=args[2])
+            try:
+                amount = int(args[3])
+            except ValueError:
+                return "Invalid amount: {}.".format(args[3])
+
+            user = session.query(User).filter_by(id=id).first()
+            if not user:
+                return "@{user} has never joined the channel.".format(
+                    user=args[2])
 
             if args[1] == "add":
-                # Format: !points add [username] [amount]
-                user = session.query(User).filter_by(id=id).first()
-                user.points += int(args[3])
+                return user.add_points(user, amount, False) or (
+                    "Added {added} {name} to @{user}'s balance. ",
+                    "They now have {amount} {name}."
+                ).format(
+                    added=args[3], user=args[2], amount=user.points,
+                    name=self.points_name + ('s' if user.points != 1 else '')
+                )
 
-                session.add(user)
-                session.commit()
-
-                return "@{user} now has {amt} points".format(user=args[2], amt=user.points)
             elif args[1] == "remove":
-                # Format: !points remove [username] [amount]
-                user = session.query(User).filter_by(id=id).first()
+                return user.remove_points(user, amount, False) or (
+                    "Removed {removed} {name} from @{user}'s balance. ",
+                    "They now have {amount} {name}."
+                ).format(
+                    removed=args[3], user=args[2], amount=user.points,
+                    name=self.points_name + ('s' if user.points != 1 else '')
+                )
 
-                if int(args[3]) > user.points:
-                    return "Cannot remove more points than the user has."
-                else:
-                    user.points -= int(args[3])
-
-                    session.add(user)
-                    session.commit()
-
-                    return "@{user}'s points have been decreased to: {amt}".format(user=args[2], amt=user.points)
             elif args[1] == "set":
-                # Format: !points set [username] [amount]
-                user = session.query(User).filter_by(id=id).first()
-                user.points = int(args[3])
-
-                session.add(user)
-                session.commit()
-
-                return "Set @{user}'s points to {amt}".format(user=args[2], amt=args[3])
+                return user.set_points(user, amount, False) or (
+                    "Set @{user}'s balance to {amount} {name}."
+                ).format(
+                    user=args[2], amount=args[3],
+                    name=self.points_name + ('s' if user.points != 1 else '')
+                )
             else:
-                return "Invalid option"
+                return "Invalid argument: '{}'.".format(args[1])
         else:
-            id = data["user_id"]
+            if len(args) > 1:
+                id = self.get_channel(args[2]).get("userId")
+                if id is None:
+                    return "User not found."
+            else:
+                id = data["user_id"]
             user = session.query(User).filter_by(id=id).first()
             return "@{user} has {amount} {name}.".format(
-                user=data["user_name"],
-                amount=user.points,
+                user=data["user_name"], amount=user.points,
                 name=self.points_name + ('s' if user.points != 1 else ''))
 
 

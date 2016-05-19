@@ -25,7 +25,7 @@ class Beam:
 
     message_id = 0
 
-    current_users = dict()
+    viewers = dict()
 
     def __init__(self, debug="INFO", **kwargs):
         self._init_logger(debug, kwargs.get("log_to_file", True))
@@ -77,28 +77,32 @@ class Beam:
         self.logger.info("Logger initialized with level '{}'.".format(level))
 
     def _init_users(self):
-        names = set(
-            user["userName"] for user in
-            self.get_chat_users(self.channel_data["id"]))
+        """Initialize and cache users."""
 
-        viewers = set(
-            user["userId"] for user in
-            self.get_chat_users(self.channel_data["id"]))
+        viewers = dict(
+            (user["userId"], user["userName"]) for user in
+            self.get_chat_users(self.channel_data["id"])
+        )
 
         stored_users = set(
-            user[0] for user in session.query(User).with_entities(User.id))
+            user[0] for user in session.query(User).with_entities(User.id)
+        )
 
-        for user in viewers - stored_users:
-            user = User(id=user, joins=1)
-            session.add(user)
-
-        for name in names:
-            for user in viewers:
-                self.current_users.update({str(user): str(name)})
+        for user in set(viewers.keys()) - stored_users:
+            session.add(User(id=user, joins=1))
 
         session.commit()
 
+        self.viewers.update(viewers)
+
         self.logger.info("Successfully added new users to database.")
+
+    def _init_points(self):
+        """Initialize the auto-distribution of points."""
+        PeriodicCallback(
+            self.distribute_points,
+            self.config.get("points").get("interval") * 1000
+        ).start()
 
     def _request(self, url, method="GET", **kwargs):
         """Send HTTP request to Beam."""
@@ -427,17 +431,13 @@ class Beam:
                             "Thanks for the subscription, @{}! <3".format(
                                 packet["data"][1]["user"]["username"]))
 
-    def _init_points(self):
-        PeriodicCallback(self.distribute_points, self.config.get("points").get("interval") * 1000).start()
-
     def distribute_points(self):
+        """Give points to all viewers."""
 
         points = self.config.get("points").get("per_interval")
 
-        for id, name in self.current_users.items():
-            add_status = User.add_points(User, id, name, points, False)
-
-            if add_status is "" or add_status == "":
-                pass
-            else:
-                self.send_message(add_status)
+        for user_id in self.viewers:
+            user = session.query(User).filter_by(id=user_id).first()
+            response = user.add_points(user, points)
+            if response:
+                self.send_message(response)

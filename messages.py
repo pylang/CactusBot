@@ -32,7 +32,9 @@ class MessageHandler(Beam):
             "social": SocialCommand(self.get_channel),
             "uptime": UptimeCommand(self._request),
             "friend": FriendCommand(self.get_channel),
-            "points": PointsCommand(self.config["points"]["name"], self.get_channel),
+            "points": PointsCommand(
+                self.config["points"]["name"],
+                self.get_channel),
             "spamprot": SpamProtCommand(self.update_config),
             "pro": ProCommand(),
             "sub": SubCommand(),
@@ -47,10 +49,9 @@ class MessageHandler(Beam):
             if "data" not in response:
                 self.logger.debug("Data key not in response!")
                 self.logger.debug("response:\n\t{}".format(response))
-                return None
+                return
         else:
-            # response IS None, so it's nothing
-            return None
+            return
 
         data = response["data"]
 
@@ -192,9 +193,7 @@ class MessageHandler(Beam):
 
         session.commit()
 
-        self.current_users.update(
-            {str(data["id"]): str(data["username"])}
-        )
+        self.viewers[data["id"]] = data["username"]
 
         self.logger.info("- {user} joined".format(
             user=data["username"]))
@@ -206,7 +205,7 @@ class MessageHandler(Beam):
     def leave_handler(self, data):
         """Handle user leave packets from Beam."""
 
-        del self.current_users[str(data["id"])]
+        del self.current_users[data["id"]]
 
         if data["username"] is not None:
             self.logger.info("- {user} left".format(
