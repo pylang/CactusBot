@@ -99,7 +99,7 @@ class Beam:
 
     def _init_points(self):
         """Initialize the auto-distribution of points."""
-        PeriodicCallback(
+        self.points_callback = PeriodicCallback(
             self.distribute_points,
             self.config.get("points").get("interval") * 1000
         ).start()

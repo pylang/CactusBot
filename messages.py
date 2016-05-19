@@ -34,7 +34,8 @@ class MessageHandler(Beam):
             "friend": FriendCommand(self.get_channel),
             "points": PointsCommand(
                 self.config["points"]["name"],
-                self.get_channel),
+                self.get_channel,
+                self.update_config),
             "spamprot": SpamProtCommand(self.update_config),
             "pro": ProCommand(),
             "sub": SubCommand(),
@@ -205,7 +206,7 @@ class MessageHandler(Beam):
     def leave_handler(self, data):
         """Handle user leave packets from Beam."""
 
-        del self.current_users[data["id"]]
+        del self.viewers[data["id"]]
 
         if data["username"] is not None:
             self.logger.info("- {user} left".format(

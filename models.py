@@ -2,7 +2,6 @@ from sqlalchemy import create_engine
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import Session, relationship
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.ext.hybrid import hybrid_property, hybrid_method
 
 from functools import wraps, partial
 
@@ -44,10 +43,6 @@ all_roles = (
 
 mod_roles = ("Founder", "Staff", "Global Mod", "Mod")
 mod_only = role_specific(*mod_roles, reply="mod")
-
-
-def is_mod(username):
-    pass
 
 
 class Command(Base):
@@ -359,27 +354,30 @@ class UptimeCommand(Command):
 
 class PointsCommand(Command):
 
-    def __init__(self, points_name, get_channel):
+    def __init__(self, name, get_channel, update_config):
         super(PointsCommand, self).__init__()
-        self.points_name = points_name
+        self.name = name
         self.get_channel = get_channel
+        self.update_config = update_config
 
     @mod_only
     def __call__(self, args, data):
         if len(args) > 3:
-            id = self.get_channel(args[2]).get("userId")
-            if id is None:
-                return "@{user} has never joined the channel.".format(
-                    user=args[2])
-            try:
-                amount = int(args[3])
-            except ValueError:
-                return "Invalid amount: {}.".format(args[3])
+            if args[1] in ("add", "remove", "set"):
+                id = self.get_channel(args[2]).get("userId")
+                if id is None:
+                    return "@{user} has never joined the channel.".format(
+                        user=args[2])
+                try:
+                    amount = int(args[3])
+                except ValueError:
+                    return "Invalid amount: {}.".format(args[3])
+                else:
+                    user = session.query(User).filter_by(id=id).first()
 
-            user = session.query(User).filter_by(id=id).first()
-            if not user:
-                return "@{user} has never joined the channel.".format(
-                    user=args[2])
+                    if not user:
+                        return "@{user} has never joined the channel.".format(
+                            user=args[2])
 
             if args[1] == "add":
                 return user.add_points(user, amount, False) or (
@@ -387,7 +385,7 @@ class PointsCommand(Command):
                     "They now have {amount} {name}."
                 ).format(
                     added=args[3], user=args[2], amount=user.points,
-                    name=self.points_name + ('s' if user.points != 1 else '')
+                    name=self.name + ('s' if user.points != 1 else '')
                 )
 
             elif args[1] == "remove":
@@ -396,7 +394,7 @@ class PointsCommand(Command):
                     "They now have {amount} {name}."
                 ).format(
                     removed=args[3], user=args[2], amount=user.points,
-                    name=self.points_name + ('s' if user.points != 1 else '')
+                    name=self.name + ('s' if user.points != 1 else '')
                 )
 
             elif args[1] == "set":
@@ -404,21 +402,52 @@ class PointsCommand(Command):
                     "Set @{user}'s balance to {amount} {name}."
                 ).format(
                     user=args[2], amount=args[3],
-                    name=self.points_name + ('s' if user.points != 1 else '')
+                    name=self.name + ('s' if user.points != 1 else '')
                 )
-            else:
-                return "Invalid argument: '{}'.".format(args[1])
+            elif args[1] == "config":
+                if args[2] == "name":
+                    self.update_config("points.name", args[3])
+                    self.name = args[3]
+                    return "Set points name to '{}'.".format(args[3])
+                # elif args[2] == "interval":
+                #     try:
+                #         interval = int(args[3])
+                #     except ValueError:
+                #         return "Invalid interval: '{}'.".format(args[3])
+                #     else:
+                #         if interval < 30:
+                #             return "The minimum interval is 30 seconds."
+                #
+                #         self.update_config("points.interval", interval)
+                #         return "Interval set to {} seconds.".format(interval)
+                # elif args[2] == "per":
+                #     try:
+                #         points_per_interval = int(args[3])
+                #     except ValueError:
+                #         return "Invalid integer: '{}'.".format(args[3])
+                #     else:
+                #         self.update_config(
+                #             "points.per_interval", points_per_interval)
+                #         return "Points per interval set to {}.".format(
+                #             points_per_interval)
+                return "Invalid argument: '{}'.".format(args[2])
+            return "Invalid argument: '{}'.".format(args[1])
         else:
             if len(args) > 1:
-                id = self.get_channel(args[2]).get("userId")
+                id = self.get_channel(args[1]).get("userId")
                 if id is None:
                     return "User not found."
+                user_name = args[1]
             else:
                 id = data["user_id"]
+                user_name = data["user_name"]
             user = session.query(User).filter_by(id=id).first()
+            if user is None:
+                return "@{user} has never joined the channel.".format(
+                    user=args[1])
             return "@{user} has {amount} {name}.".format(
-                user=data["user_name"], amount=user.points,
-                name=self.points_name + ('s' if user.points != 1 else ''))
+                user=user_name, amount=user.points,
+                name=self.name + ('s' if user.points != 1 else ''))
 
 
 class RepeatCommand(Command):
