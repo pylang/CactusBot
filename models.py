@@ -45,10 +45,6 @@ mod_roles = ("Founder", "Staff", "Global Mod", "Mod")
 mod_only = role_specific(*mod_roles, reply="mod")
 
 
-def is_mod(username):
-    pass
-
-
 class Command(Base):
     __tablename__ = "commands"
 
@@ -398,10 +394,11 @@ class UptimeCommand(Command):
 
 class PointsCommand(Command):
 
-    def __init__(self, points_name, get_channel):
+    def __init__(self, points_name, get_channel, update_config):
         super(PointsCommand, self).__init__()
         self.points_name = points_name
         self.get_channel = get_channel
+        self.update_config = update_config
 
     def __call__(self, args, data):
         if len(args) == 4:
@@ -438,8 +435,43 @@ class PointsCommand(Command):
                 session.commit()
 
                 return "Set @{user}'s points to {amt}".format(user=args[2], amt=args[3])
+            elif args[1] == "name":
+                if args[2] == "set":
+                    # Format !points name set [name]
+                    self.update_config("points.name", args[2])
+
+                    return "Set the points name to {}".format(args[2])
+                else:
+                    return "{} is not a valid option.".format(args[2])
             else:
                 return "Invalid option"
+        elif len(args) == 3:
+            if args[1] == "interval":
+                # Format !points interval [interval]
+                try:
+                    interval = int(args[2])
+                except ValueError:
+                    return "{} is not a number".format(args[2])
+                else:
+
+                    if interval <= 30:
+                        return "Please make your interval greater than 30 seconds."
+                    else:
+                        self.update_config("points.interval", interval)
+
+                        return "Interval has been updated to: {}".format(interval)
+
+            if args[1] == "per":
+                try:
+                    per = int(args[2])
+                except ValueError:
+                    return "{} is not a number".format(args[2])
+                else:
+                    self.update_config("points.per_interval", per)
+
+                    return "Points per updated to {}".format(per)
+            else:
+                return "{} is not a valid option.".format(args[1])
         else:
             id = data["user_id"]
             user = session.query(User).filter_by(id=id).first()

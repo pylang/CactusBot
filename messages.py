@@ -32,7 +32,7 @@ class MessageHandler(Beam):
             "social": SocialCommand(self.get_channel),
             "uptime": UptimeCommand(self._request),
             "friend": FriendCommand(self.get_channel),
-            "points": PointsCommand(self.config["points"]["name"], self.get_channel),
+            "points": PointsCommand(self.config["points"]["name"], self.get_channel, self.update_config),
             "spamprot": SpamProtCommand(self.update_config),
             "pro": ProCommand(),
             "sub": SubCommand(),
