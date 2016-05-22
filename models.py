@@ -113,7 +113,6 @@ class Command(Base):
                         cmd = cmd.strip()
                         response = response.replace("%!" + cmd + "%", resp)
                     elif cmd in builtins:
-                        print(builtins[cmd])
                         response = response.replace("%!" + cmd + "%",
                                 builtins[cmd])
             response = response.replace("%args%", ' '.join(args[1:]))
