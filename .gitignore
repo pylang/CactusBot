@@ -76,3 +76,9 @@ data/*.sqlite
 
 # Virtualenv
 venv/
+
+# VIM files
+
+*~
+*.swp
+*.swo

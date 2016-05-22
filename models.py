@@ -8,7 +8,7 @@ from functools import wraps, partial
 from os.path import abspath, dirname, join
 from datetime import datetime
 
-from re import sub, findall, match
+from re import sub, findall, match, search
 from random import randrange, choice
 
 from tornado.ioloop import PeriodicCallback
@@ -82,6 +82,24 @@ class Command(Base):
                 )
             except IndexError:
                 return "Not enough arguments!"
+
+            # TODO: Work with default commands
+
+            try:
+                cmd = search(
+                    "%!([^%]+)%", response
+                ).group(1)
+            except:
+                pass
+            else:
+                if cmd:
+                    command = session.query(
+                            Command).filter_by(command=cmd).first()
+                    if command:
+                        resp = command.response
+                        command = command.command
+                        cmd = cmd.strip()
+                        response = response.replace("%!" + cmd + "%", resp)
 
             response = response.replace("%args%", ' '.join(args[1:]))
 
