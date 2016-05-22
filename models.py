@@ -83,8 +83,6 @@ class Command(Base):
             except IndexError:
                 return "Not enough arguments!"
 
-            # TODO: Work with default commands
-
             try:
                 cmd = search(
                     "%!([^%]+)%", response
@@ -93,6 +91,20 @@ class Command(Base):
                 pass
             else:
                 if cmd:
+
+                    # FIX: Needs to be fixed with the rewrite
+                    # HACK
+
+                    builtins = {
+                        "cactus": "Ohai! I'm CactusBot :cactus",
+                        "test": "Test confirmed :cactus",
+                        "help": "Checkout my documentation at cactusbot.readthedocs.org.",
+                        "command": CommandCommand(),
+                        "pro": ProCommand(),
+                        "sub": SubCommand(),
+                        "cube": CubeCommand(),
+                        "temmie": TemmieCommand()
+                    }
                     command = session.query(
                             Command).filter_by(command=cmd).first()
                     if command:
@@ -100,7 +112,10 @@ class Command(Base):
                         command = command.command
                         cmd = cmd.strip()
                         response = response.replace("%!" + cmd + "%", resp)
-
+                    elif cmd in builtins:
+                        print(builtins[cmd])
+                        response = response.replace("%!" + cmd + "%",
+                                builtins[cmd])
             response = response.replace("%args%", ' '.join(args[1:]))
 
             self.calls += 1
