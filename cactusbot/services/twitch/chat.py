@@ -45,6 +45,8 @@ class TwitchChat(WebSocket):
     async def initialize(self, username, oauth):
         """Send an authentication packet."""
 
+        await self.send("CAP REQ",
+                        ":twitch.tv/commands twitch.tv/membership")
         await self.send("PASS", oauth)
         await self.send("NICK", username)
         await self.send("JOIN", self.channel)

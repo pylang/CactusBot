@@ -44,7 +44,7 @@ class Meta(Command):
     @Command.subcommand
     async def list(self):
         """List all custom commands."""
-        commands = await self.api.get_command()
+        commands = await self.api.get_commands()
         if commands:
             return "Commands: {}.".format(
                 ', '.join(command["name"] for command in commands)

@@ -34,7 +34,7 @@ class CactusAPI(API):
             user=self.user, command=name), data=data)
 
     # FIXME: match API
-    async def get_command(self, name=None):
+    async def get_commands(self, name=None):
         """Get a command."""
         if name is not None:
             return await self.get("/user/{user}/command/{command}".format(
