@@ -25,7 +25,7 @@ class TwitchHandler(Handler):
         self.chat = None
 
     async def run(self, *auth):
-        """Connect to Beam chat and handle incoming packets."""
+        """Connect to Twitch chat and handle incoming packets."""
 
         server = await self.api.get_chat(self.channel)
 
@@ -38,7 +38,7 @@ class TwitchHandler(Handler):
         await self.on_message(packet["message"], packet["username"])
 
     async def send(self, message):
-        """Send a packet to Beam."""
+        """Send a packet to Twitch."""
 
         if self.chat is None:
             raise ConnectionError("Chat not initialized.")

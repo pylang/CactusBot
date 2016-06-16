@@ -1,10 +1,10 @@
-"""Interact with the Beam API."""
+"""Interact with the Twitch API."""
 
 from ..api import API
 
 
 class TwitchAPI(API):
-    """Interact with the Beam API."""
+    """Interact with the Twitch API."""
 
     URL = "https://api.twitch.tv/api/"
 
