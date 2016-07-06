@@ -32,7 +32,7 @@ class TwitchChat(WebSocket):
         if command == "JOIN":
             await super().send("JOIN #{}".format(self.channel))
         elif command == "PRIVMSG":
-            await super().send("PRIVMSG #{chan} : {msg}".format(
+            await super().send("PRIVMSG #{chan} :{msg}".format(
                 chan=self.channel, msg=data)
             )
         elif command == "PONG":
