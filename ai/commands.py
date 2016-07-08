@@ -32,13 +32,22 @@ def sleep(message):
         return True
     return ""
 
-# TODO: make commands cross-platform
+
+# TODO: make command cross-platform
 def chrome(message):
     """Open chrome browser."""
     if message is not None and message.lower().startswith("start chrome"):
-        print("As you wish.  Starting chrome ...")
+        print("As you wish.  Starting Chrome ...")
         os.system("start chrome.exe")
         #webdriver.Chrome()
+    return ""
+
+
+def editor(message):
+    """Open atom editor."""
+    if message is not None and message.lower().startswith("start editor"):
+        print("As you wish.  Starting Atom ...")
+        os.system("atom")
     return ""
 
 
@@ -47,7 +56,7 @@ def jupyter(message):
     # FIX: Parallel shutdown with kernel
     if message is not None and message.lower().startswith("start jupiter"):
         print("As you wish.  Starting Jupyter ...")
-        os.system("jupyter.exe notebook")
+        os.system("jupyter notebook")
     return ""
 
 

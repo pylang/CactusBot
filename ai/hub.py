@@ -76,6 +76,7 @@ if __name__ == "__main__":
 
                 #TODO: Clean up; automate command factory and inspection.
                 cmd.chrome(feedback)
+                cmd.editor(feedback)
                 cmd.jupyter(feedback)
                 cmd.thanks(feedback)
                 cmd.google(feedback)
