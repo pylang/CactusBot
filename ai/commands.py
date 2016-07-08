@@ -1,5 +1,6 @@
 """Local speech commands."""
 import os
+import sys
 
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
@@ -25,9 +26,9 @@ def thanks(message):
     return ""
 
 
-def sleep(message):
-    """Shutdown."""
-    if message is not None and message.lower() == "sleep":
+def off(message):
+    """Shutdown; break all loops."""
+    if message is not None and message.lower() == "switch off":
         print("This is {name}, signing off!".format(name=NAME))
         return True
     return ""

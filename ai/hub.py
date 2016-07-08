@@ -5,6 +5,7 @@ Run: `python hub.py`, say "Hey Matilda", then "<command>", e.g. "thank you"
 
 """
 import os
+import sys
 import logging
 
 import speech_recognition as sr
@@ -61,22 +62,28 @@ if __name__ == "__main__":
         while True:
             echo = listen(source)                          # listens passively
             logging.debug("echo: {}".format(echo))
-            #print("echo: {}".format(echo))
+            print("echo: {}".format(echo))
             # Only response when called by name, e.g. "hey jarvis"
             # TODO: Need to stay in this block until satisfied; end after thank you
             if cmd.greet(echo):
-                # Take new instructions here
-                feedback = listen(source)                  # listens actively
-                message = parse_commands(feedback)
-                logging.debug("message: {}".format(message))
-                print("""I heard: "{}" """.format(message))
+                while True:
+                    # Take new instructions here
+                    feedback = listen(source)                  # listens actively
+                    message = parse_commands(feedback)
+                    logging.debug("message: {}".format(message))
+                    print("""I heard: "{}" """.format(message))
 
-                if cmd.sleep(feedback):
-                    break
+                    if cmd.thanks(feedback):
+                        print("Listening ...")
+                        break
 
-                #TODO: Clean up; automate command factory and inspection.
-                cmd.chrome(feedback)
-                cmd.editor(feedback)
-                cmd.jupyter(feedback)
-                cmd.thanks(feedback)
-                cmd.google(feedback)
+                    if cmd.off(feedback):
+                        sys.exit("Shutting down ...")
+
+
+                    #TODO: Clean up; automate command factory and inspection.
+                    cmd.chrome(feedback)
+                    cmd.editor(feedback)
+                    cmd.jupyter(feedback)
+                    cmd.thanks(feedback)
+                    cmd.google(feedback)
