@@ -1,11 +1,13 @@
 """Local speech commands."""
 import os
 import sys
+import logging
 
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 
 from config import NAME
+from config import CB_COMMANDS
 
 # COMMANDS --------------------------------------------------------------------
 def greet(message):
@@ -61,13 +63,15 @@ def jupyter(message):
     return ""
 
 
-def google(message):
+def search(message):
     """BETA: Search google; requires ChromeDriver and set path; optional."""
     # Shuts down with ai.
     if message is not None and message.lower().startswith("google"):
         try:
             if len(message) != 1: message = message.split(' ', 1)[1]    # skip first word
-        except(IndexError):
+        except(IndexError) as e:
+            logging.debug("Found error in `google`: {}".format(e))
+            print("Found error in `google`", e)
             pass
 
         br = webdriver.Chrome()
@@ -76,4 +80,32 @@ def google(message):
         search = br.find_element_by_name('q')
         search.send_keys(message)
         search.send_keys(Keys.RETURN)
-        # TODO: add cleaner exit option
+        # TODO: add cleaner exit option; unlink once opened
+
+# HELPERS ---------------------------------------------------------------------
+# Just give me a list of commands
+# TODO: currently no interface for greping commands; dehard code with intra called
+
+def parse_commands(response):
+    """Return a repsonse; prepend ! given a detected bot command from an audio response."""
+    # Using CB commands
+    try:
+        first_word = response.split(None, 1)[0]
+        command_found = any([first_word.lower().startswith(command) for command in CB_COMMANDS])
+    except(AttributeError) as e:                           # if None
+        logging.debug("Found error in `parse_commands`: {}".format(e))
+        print("Found error in `parse_commands`", e)
+        pass
+
+    if response is not None and command_found:
+        # first_arg = message.split(" ")[0]
+        # if first_arg.lower() == "hey {name}".format(name=NAME.lower()):
+        response = response.replace(first_word, first_word.lower())
+        print(response, first_word)
+        response = "".join([u"!", response])
+
+        # TODO: send command to chat
+
+    return response
+
+    # Only when given a CB command should it interact with the chat

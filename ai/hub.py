@@ -1,7 +1,7 @@
 """Central speech recognition code.
 
-Requires: `pyaudio` and `SpeechRecongnition`
-Run: `python hub.py`, say "Hey Matilda", then "<command>", e.g. "thank you"
+Requires: `pyaudio` and `SpeechRecongnition` (virtual environment recommended)
+Run: `python matilda.py`, say "Hey Matilda", then "<command>", e.g. "thank you"
 
 """
 import os
@@ -11,7 +11,7 @@ import logging
 import speech_recognition as sr
 
 import commands as cmd
-from config import COMMAND
+
 
 # INPUT -----------------------------------------------------------------------
 recog = sr.Recognizer()
@@ -38,52 +38,39 @@ def listen(source):
     else:
         return ""
 
-# HELPERS ---------------------------------------------------------------------
-def parse_commands(response):
-    """Detect bot commands from an audio response."""
-    # Using CB commands
-    if response is not None and response.lower().startswith(COMMAND):
-        response = "".join([u"!", response])
-        # first_arg = message.split(" ")[0]
-        # if first_arg.lower() == "hey {name}".format(name=NAME.lower()):
-    return response
-
-    # Only when given a CB command should it interact with the chat
-
-
 # -----------------------------------------------------------------------------
-# TODO: Replace
-if __name__ == "__main__":
-    # Microphone stays attentive unless told "Hey {name}... sleep"
-    # `echo` and `feedback` are listen() objects
-    with sr.Microphone() as source:
-        print("Listening ...")
+#     # Microphone stays attentive unless told "Hey {name}... sleep"
+#     # `echo` and `feedback` are listen() objects
+with sr.Microphone() as source:
+    # FIX: intial hesitation when mic starts
+    print("Listening ...")
 
-        while True:
-            echo = listen(source)                          # listens passively
-            logging.debug("echo: {}".format(echo))
-            print("echo: {}".format(echo))
-            # Only response when called by name, e.g. "hey jarvis"
-            # TODO: Need to stay in this block until satisfied; end after thank you
-            if cmd.greet(echo):
-                while True:
-                    # Take new instructions here
-                    feedback = listen(source)                  # listens actively
-                    message = parse_commands(feedback)
-                    logging.debug("message: {}".format(message))
-                    print("""I heard: "{}" """.format(message))
+    while True:
+        echo = listen(source)                          # listens passively
+        logging.debug("echo: {}".format(echo))
+        print("echo: {}".format(echo))
+        # Only response when called by name, e.g. "hey jarvis"
+        # TODO: Need to stay in this block until satisfied; end after thank you
+        if cmd.greet(echo):
+            while True:
+                # Take new instructions here
+                feedback = listen(source)                  # listens actively
+                message = cmd.parse_commands(feedback)
+                logging.debug("message: {}".format(message))
+                print("""I heard: "{}" """.format(message))
 
-                    if cmd.thanks(feedback):
-                        print("Listening ...")
-                        break
+                if cmd.thanks(feedback):
+                    print("Listening ...")
+                    break
 
-                    if cmd.off(feedback):
-                        sys.exit("Shutting down ...")
+                if cmd.off(feedback):
+                    sys.exit("Shutting down ...")
 
 
-                    #TODO: Clean up; automate command factory and inspection.
-                    cmd.chrome(feedback)
-                    cmd.editor(feedback)
-                    cmd.jupyter(feedback)
-                    cmd.thanks(feedback)
-                    cmd.google(feedback)
+                #TODO: Clean up; automate command factory and inspection.
+                cmd.chrome(feedback)
+                cmd.editor(feedback)
+                cmd.jupyter(feedback)
+                cmd.thanks(feedback)
+                # BUG: hangs with google search
+                cmd.search(feedback)
