@@ -71,7 +71,7 @@ def search(message):
             if len(message) != 1: message = message.split(' ', 1)[1]    # skip first word
         except(IndexError) as e:
             logging.debug("Found error in `google`: {}".format(e))
-            print("Found error in `google`", e)
+            #print("Found error in `google`", e)
             pass
 
         br = webdriver.Chrome()
@@ -94,7 +94,7 @@ def parse_commands(response):
         command_found = any([first_word.lower().startswith(command) for command in CB_COMMANDS])
     except(AttributeError) as e:                           # if None
         logging.debug("Found error in `parse_commands`: {}".format(e))
-        print("Found error in `parse_commands`", e)
+        #print("Found error in `parse_commands`", e)
         pass
 
     if response is not None and command_found:
