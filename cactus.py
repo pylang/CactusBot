@@ -1,25 +1,20 @@
 # CactusBot!
-
-from messages import MessageHandler
-from beam import Beam
-
-from models import Base, engine
-
-from json import load, dump
-
 from os.path import exists
 from shutil import copyfile
-
+from sys import exit
+from traceback import format_exc
+from time import sleep
+from argparse import ArgumentParser
 from functools import reduce, partial
+from json import load, dump
 
 from tornado.ioloop import IOLoop
 from tornado.autoreload import add_reload_hook, watch, start
 
-from sys import exit
-from traceback import format_exc
-from time import sleep
-
-from argparse import ArgumentParser
+from messages import MessageHandler
+from beam import Beam
+from models import Base, engine
+from ai import hub
 
 
 cactus_art = """CactusBot initialized!

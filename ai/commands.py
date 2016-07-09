@@ -6,8 +6,8 @@ import logging
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 
-from config import NAME
-from config import CB_COMMANDS
+from .conf import NAME
+from .conf import CB_COMMANDS
 
 # COMMANDS --------------------------------------------------------------------
 def greet(message):

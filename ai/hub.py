@@ -10,7 +10,7 @@ import logging
 
 import speech_recognition as sr
 
-import commands as cmd
+from . import commands as cmd
 
 
 # INPUT -----------------------------------------------------------------------
