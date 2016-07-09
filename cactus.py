@@ -7,6 +7,7 @@ from time import sleep
 from argparse import ArgumentParser
 from functools import reduce, partial
 from json import load, dump
+import asyncio
 
 from tornado.ioloop import IOLoop
 from tornado.autoreload import add_reload_hook, watch, start
@@ -155,6 +156,7 @@ class Cactus(MessageHandler, Beam):
                     self.bot_data["id"],
                     silent=self.silent)
 
+
                 def connect_liveloading():
                     try:
                         self.connect_to_liveloading(
@@ -167,6 +169,8 @@ class Cactus(MessageHandler, Beam):
                         connect_liveloading()
 
                 connect_liveloading()
+                # FIX: call to hub.py, then release when quiet.
+                #IOLoop.current().spawn_callback(hub.run)
 
                 if str(self.debug).lower() in ("true", "debug"):
                     add_reload_hook(partial(
