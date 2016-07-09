@@ -7,6 +7,7 @@ Run: `python matilda.py`, say "Hey Matilda", then "<command>", e.g. "thank you"
 import os
 import sys
 import logging
+import asyncio
 
 import speech_recognition as sr
 
@@ -17,7 +18,7 @@ from . import commands as cmd
 recog = sr.Recognizer()
 #recog.energy_threshold = 2000                             # Range 50 to 4000 is good
 
-def listen(source):
+async def listen(source):
     """Return a str response from the AI backend."""
     recog.adjust_for_ambient_noise(source)                 # auto sets threshold
     audio = recog.listen(source)
@@ -41,36 +42,37 @@ def listen(source):
 # -----------------------------------------------------------------------------
 #     # Microphone stays attentive unless told "Hey {name}... sleep"
 #     # `echo` and `feedback` are listen() objects
-with sr.Microphone() as source:
-    # FIX: intial hesitation when mic starts
-    print("Listening ...")
+async def run():
+    with sr.Microphone() as source:
+        # FIX: intial hesitation when mic starts
+        print("Listening ...")
 
-    while True:
-        echo = listen(source)                          # listens passively
-        logging.debug("echo: {}".format(echo))
-        print("echo: {}".format(echo))
-        # Only response when called by name, e.g. "hey jarvis"
-        # TODO: Need to stay in this block until satisfied; end after thank you
-        if cmd.greet(echo):
-            while True:
-                # Take new instructions here
-                feedback = listen(source)                  # listens actively
-                message = cmd.parse_commands(feedback)
-                logging.debug("message: {}".format(message))
-                print("""I heard: "{}" """.format(message))
+        while True:
+            echo = await listen(source)                          # listens passively
+            logging.debug("echo: {}".format(echo))
+            print("echo: {}".format(echo))
+            # Only response when called by name, e.g. "hey jarvis"
+            # TODO: Need to stay in this block until satisfied; end after thank you
+            if cmd.greet(echo):
+                while True:
+                    # Take new instructions here
+                    feedback = await listen(source)                  # listens actively
+                    message = cmd.parse_commands(feedback)
+                    logging.debug("message: {}".format(message))
+                    print("""I heard: "{}" """.format(message))
 
-                if cmd.thanks(feedback):
-                    print("Listening ...")
-                    break
+                    if cmd.thanks(feedback):
+                        print("Listening ...")
+                        break
 
-                if cmd.off(feedback):
-                    sys.exit("Shutting down ...")
+                    if cmd.off(feedback):
+                        sys.exit("Shutting down ...")
 
 
-                #TODO: Clean up; automate command factory and inspection.
-                cmd.chrome(feedback)
-                cmd.editor(feedback)
-                cmd.jupyter(feedback)
-                cmd.thanks(feedback)
-                # BUG: hangs with google search
-                cmd.search(feedback)
+                    #TODO: Clean up; automate command factory and inspection.
+                    cmd.chrome(feedback)
+                    cmd.editor(feedback)
+                    cmd.jupyter(feedback)
+                    cmd.thanks(feedback)
+                    # BUG: hangs with google search
+                    cmd.search(feedback)
