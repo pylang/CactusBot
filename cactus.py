@@ -170,7 +170,11 @@ class Cactus(MessageHandler, Beam):
 
                 connect_liveloading()
                 # FIX: call to hub.py, then release when quiet.
-                #IOLoop.current().spawn_callback(hub.run)
+                # Using threaded listener yields to cactus now, but cactus does not work coop.
+                # Need to configure cactus loop to work coop
+                # NOTE: Use loops in hub.py to override cactus loop
+                IOLoop.current().spawn_callback(partial(hub.run, True))
+                #IOLoop.current().spawn_callback(partial(hub.run, False))
 
                 if str(self.debug).lower() in ("true", "debug"):
                     add_reload_hook(partial(
